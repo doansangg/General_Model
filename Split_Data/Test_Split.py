@@ -5,8 +5,8 @@ path_image="../Kvasir_test/images"
 path_mask="../Kvasir_test/masks"
 for count,i in enumerate(os.listdir(path_image)):
     print(count)
-    image="../Kvasir-SEG/images"+'/'+i
-    mask="../Kvasir-SEG/masks"+'/'+i
+    image="../Kvasir_test/images"+'/'+i
+    mask="../Kvasir_test/masks"+'/'+i
     string=image+"\t"+mask+"\n"
     if os.path.exists(path_mask+'/'+i):
         # if count < 0.85* len(os.listdir(path_image)):

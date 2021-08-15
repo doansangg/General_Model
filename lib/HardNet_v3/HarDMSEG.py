@@ -108,6 +108,20 @@ class CONV_1024(nn.Module):
     def forward(self, x) :
         x=self.branch1(x)
         return x    
+
+class CONV_MASK(nn.Module):
+    def __init__(self, in_channel, out_channel, kernel_size, stride=1, padding=0, dilation=1):
+        super(CONV_MASK, self).__init__()
+        self.branch1 = nn.Sequential(
+                BasicConv2d(in_channel, 640,kernel_size= 3,stride=1,padding=1),
+                BasicConv2d(64, 32, kernel_size=3,stride=1 ,padding=1),
+                BasicConv2d(32, 16, kernel_size=3,stride=2, padding=1),
+                BasicConv2d(1, out_channel, kernel_size=3,stride=2, padding=1),
+            )
+    def forward(self, x) :
+        x=self.branch1(x)
+        return x
+
 class RFB_modified(nn.Module):
     def __init__(self, in_channel, out_channel):
         super(RFB_modified, self).__init__()
@@ -194,10 +208,10 @@ class aggregation(nn.Module):
         return x
 
 
-class HarDMSEG_v2(nn.Module):
+class HarDMSEG_v3(nn.Module):
     # res2net based encoder decoder
     def __init__(self, channel=32):
-        super(HarDMSEG_v2, self).__init__()
+        super(HarDMSEG_v3, self).__init__()
         # ---- ResNet Backbone ----
         #self.resnet = res2net50_v1b_26w_4s(pretrained=True)
         self.relu = nn.ReLU(True)
@@ -233,6 +247,7 @@ class HarDMSEG_v2(nn.Module):
         self.upsample = nn.Upsample(scale_factor=4, mode='bilinear', align_corners=True)
         self.upsamplex2 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         self.hardnet = hardnet(arch=68)
+        self.mask = CONV_MASK(128,1,kernel_size=3,padding=1)
         # ---- extract feature for 620x22x22 ----
         self.extrac_640=CONV_640(3,640,(3,3),2,1)
         self.extrac_1024=CONV_1024(3,1024,(3,3),2,1)
@@ -265,21 +280,22 @@ class HarDMSEG_v2(nn.Module):
         x2_rfb = self.rfb2_1(x2)        # channel -> 32
         x3_rfb = self.rfb3_1(x3)        # channel -> 32
         x4_rfb = self.rfb4_1(x4)        # channel -> 32
-        
+        x1_mask=self.mask(x1)
 
-        x4_x3=self.attention(x4_rfb)
-        x3_rfb=torch.cat([x4_x3, x3_rfb], dim=1)
-        x3_rfb=self.conv(x3_rfb)
+        # x4_x3=self.attention(x4_rfb)
+        # x3_rfb=torch.cat([x4_x3, x3_rfb], dim=1)
+        # x3_rfb=self.conv(x3_rfb)
  
-        x3_x2=self.attention(x3_rfb)
-        x2_rfb=torch.cat([x3_x2, x2_rfb], dim=1)
-        x2_rfb=self.conv(x2_rfb)
+        # x3_x2=self.attention(x3_rfb)
+        # x2_rfb=torch.cat([x3_x2, x2_rfb], dim=1)
+        # x2_rfb=self.conv(x2_rfb)
         #(--End Attention--)
         ra5_feat = self.agg1(x4_rfb, x3_rfb, x2_rfb)
+        lateral_map_4 = F.interpolate(x1_mask, scale_factor=4, mode='bilinear')
         
         lateral_map_5 = F.interpolate(ra5_feat, scale_factor=8, mode='bilinear')    # NOTES: Sup-1 (bs, 1, 44, 44) -> (bs, 1, 352, 352)
-
-        return lateral_map_5 #, lateral_map_4, lateral_map_3, lateral_map_2
+        lateral_map_6 = (lateral_map_4+lateral_map_5)/2
+        return lateral_map_4,lateral_map_5 , lateral_map_6#, lateral_map_3, lateral_map_2
 # import time
 # if __name__ == '__main__':
 #     #ras = BasicConv2d(3,352,(3,3),2,1).cuda()
